@@ -1,0 +1,24 @@
+* {
+  font-family: System-Bold;
+}
+
+.background {
+  viewport-fill: #000000;
+}
+
+#time {
+  font-size: 32;
+  text-length: 32;
+  text-anchor: middle;
+  fill: #ffffff;
+  x: 85%;
+  y: 15%;
+}
+
+#bg {
+  font-size: 52;
+  text-anchor: middle;
+  fill: #ffffff;
+  x: 10%;
+  y: 20%;
+}
