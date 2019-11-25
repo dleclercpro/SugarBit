@@ -8,14 +8,21 @@ import { zeroPad } from "../common/lib";
 const timeLabel = document.getElementById("time");
 const bgLabel = document.getElementById("bg");
 
+// STATE
+const state = {
+  bgs: [],
+};
+
 // Update the clock every second
 clock.granularity = "minutes";
 
 // On every clock tick
 clock.ontick = (e) => {
-  let today = e.date;
-  let hour = zeroPad(today.getHours());
-  let min = zeroPad(today.getMinutes());
+  const today = e.date;
+  const hour = zeroPad(today.getHours());
+  const min = zeroPad(today.getMinutes());
+  
+  // Update time on watch
   timeLabel.text = `${hour}:${min}`;
 };
 
@@ -26,13 +33,13 @@ messaging.peerSocket.onmessage = (msg) => {
   // React according to message type
   switch (msgType) {
     case MSG_TYPE_BG:
-      console.log(`Received BG: ${msgValue} ${BG_UNITS} (${msgTime})`);
+      state.bgs.push(`BG: ${msgValue} ${BG_UNITS} (${msgTime})`);
       break;
       
     case MSG_TYPE_LAST_BG:
-      console.log(`Received last BG: ${msgValue} ${BG_UNITS} (${msgTime})`);
+      console.log(`Last BG: ${msgValue} ${BG_UNITS} (${msgTime})`);
       
-      // Update BG on watch face
+      // Update BG on watch
       bgLabel.text = msgValue;
       break;
       

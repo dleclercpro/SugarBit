@@ -65,5 +65,5 @@ const fetchLastBG = () => {
 // MAIN
 checkPermissions().then(() => fetchBGs()).then(() => {
     fetchLastBG();
-    setTimeout(fetchLastBG, BG_REFRESH_RATE);  
+    setInterval(fetchLastBG, BG_REFRESH_RATE);  
 });
