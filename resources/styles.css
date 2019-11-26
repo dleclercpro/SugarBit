@@ -40,6 +40,24 @@
 
 .bg {
   display: none;
-  r: 1;
+  r: 2;
   fill: #999999;
+}
+
+.target {
+  display: none;
+  x1: 0;
+  y1: 0;
+  x2: 100%;
+  y2: 0;
+  opacity: 1;
+  stroke-width: 2;
+}
+
+#target-high {
+  fill: #ff9d2f;
+}
+
+#target-low {
+  fill: #e50000;
 }

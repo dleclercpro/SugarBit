@@ -4,6 +4,8 @@
     <text id="bg" />
   </section>
   <section id="graph">
+    <line id="target-low" class="target" />
+    <line id="target-high" class="target" />
     <circle class="bg" />
     <circle class="bg" />
     <circle class="bg" />

@@ -26,6 +26,10 @@ export const getEpochTime = (t) => {
   return new Date(year, month - 1, day, hour, minute, second).getTime() / 1000;
 };
 
+export const getCurrentTime = () => {
+  return new Date().getTime() / 1000;
+}
+
 export const compareBGs = (bg1, bg2) => {
   if (bg1.t < bg2.t) { return -1; }
   if (bg1.t > bg2.t) { return 1; }

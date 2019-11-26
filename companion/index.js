@@ -1,6 +1,6 @@
 import { peerSocket } from "messaging";
 import { me } from "companion";
-import { BG_COUNT, BG_REFRESH_RATE, CMD_FETCH_BG } from "../common/globals";
+import { BG_REFRESH_RATE, CMD_FETCH_BG } from "../common/globals";
 import { sendMessage, sendMessages, getEpochTime, compareBGs } from "../common/lib";
 
 
@@ -59,12 +59,28 @@ peerSocket.onmessage = (msg) => {
   }
   
   // Destructure message
-  const { command, size, payload } = msg.data;
+  const { command, key, size, payload } = msg.data;
 
   // React according to message type
   switch (command) {
     case CMD_FETCH_BG:
-      sendBGs();
+      const { after } = payload;
+      
+      // Fetch recent BGs from server and send them over to device
+      fetchBGs(after).then(() => {
+        const nBGs = state.bgs.data.length;
+        
+        if (nBGs > 0) {
+          console.log(`Sending ${nBGs} BGs to device...`);
+
+          fillBufferWithBGs();
+          sendMessages(state.buffer);
+        }
+
+      }).catch((error) => {
+        console.error("Could not send BGs to device.");
+      });
+      
       break;
 
     default:
@@ -81,23 +97,18 @@ peerSocket.onbufferedamountdecrease = () => {
 
 // FUNCTIONS
 // Fetch recent BGs from server
-const fetchBGs = () => {
-  console.log("Fetching BGs...");
+const fetchBGs = (after) => {
+  console.log(`Fetching BGs newer than: ${after}`);
   
-  return fetch(URL + REPORTS.bgs).then((response) => {
-    return response.json();
-  }).then((json) => {
+  return fetch(URL + REPORTS.bgs).then(response => response.json()).then(json => {
     console.log("Fetched BGs successfully.");
     
-    // Use epoch time for BGs, sort them and keep only the last 24h
-    let epochBGs = Object.keys(json).reduce((bgs, t) => {
-      return [
-        ...bgs,
-        { t: getEpochTime(t), bg: json[t] },
-      ];
-    }, []);
+    // Use epoch time for BGs, keep only those after given time, sort, and store them
+    let epochBGs = Object.keys(json).reduce((bgs, t) => [
+      ...bgs, { t: getEpochTime(t), bg: json[t] }
+    ], []);
+    epochBGs = epochBGs.filter(bg => bg.t > after);
     epochBGs.sort(compareBGs);
-    epochBGs = epochBGs.slice(-Math.min(epochBGs.length, BG_COUNT));
     
     // Update state
     state.bgs = {
@@ -123,26 +134,16 @@ const fetchBGs = () => {
 
 // Fill buffer with fetched BGs
 const fillBufferWithBGs = () => {
-  state.buffer = state.bgs.data.map((bg) => {
-    return {
-      command: CMD_FETCH_BG,
-      size: state.bgs.data.length,
-      payload: bg,
-    };
-  });
-};
-
-// Send BGs loaded in state to device
-const sendBGs = () => {
+  const bgs = state.bgs.data;
+  const nBGs = bgs.length;
   
-  // Fetch recent BGs from server
-  fetchBGs().then(() => {
-    fillBufferWithBGs();
-    sendMessages(state.buffer);
-    
-  }).catch((error) => {
-    console.error("Could not send BGs to device.");
-  });
+  // Map BGs onto buffer
+  state.buffer = bgs.map((bg, i) => ({
+    command: CMD_FETCH_BG,
+    key: i + 1,
+    size: nBGs,
+    payload: bg,
+  }));
 };
 
 
