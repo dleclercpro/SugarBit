@@ -59,7 +59,7 @@ peerSocket.onmessage = (msg) => {
   }
   
   // Destructure message
-  const { command, payload } = msg.data;
+  const { command, size, payload } = msg.data;
 
   // React according to message type
   switch (command) {
@@ -126,6 +126,7 @@ const fillBufferWithBGs = () => {
   state.buffer = state.bgs.data.map((bg) => {
     return {
       command: CMD_FETCH_BG,
+      size: state.bgs.data.length,
       payload: bg,
     };
   });

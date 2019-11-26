@@ -1,14 +1,27 @@
 import document from "document";
 import clock from "clock";
+import { me } from "device";
 import { peerSocket } from "messaging";
-import { BG_UNITS, CMD_FETCH_BG } from "../common/globals";
+import { BG_UNITS, BG_GRAPH_MIN, BG_GRAPH_MAX, GRAPH_WIDTH_RATIO, GRAPH_HEIGHT_RATIO, CMD_FETCH_BG } from "../common/globals";
 import { sendMessage, formatTime, formatBG, getLast } from "../common/lib";
 
 
 
-// UI
+// UI ELEMENTS
 const timeLabel = document.getElementById("time");
 const bgLabel = document.getElementById("bg");
+const graphElement = document.getElementById("graph");
+const bgElements = document.getElementsByClassName("bg");
+
+
+
+// UI
+const graph = {
+  dBG: BG_GRAPH_MAX - BG_GRAPH_MIN, // mmol/L
+  dt: 24 * 60 * 60,                 // s
+  width: GRAPH_WIDTH_RATIO * me.screen.width,
+  height: GRAPH_HEIGHT_RATIO * me.screen.height,
+};
 
 
 
@@ -29,7 +42,7 @@ clock.ontick = (e) => {
   const hour = formatTime(today.getHours());
   const minute = formatTime(today.getMinutes());
   
-  // Update time on watch
+  // Update time
   timeLabel.text = `${hour}:${minute}`;
 };
 
@@ -54,13 +67,19 @@ peerSocket.onmessage = (msg) => {
   }
   
   // Destructure message
-  const { command, payload } = msg.data;
+  const { command, size, payload } = msg.data;
 
   // React according to message type
   switch (command) {
     case CMD_FETCH_BG:
-      //console.log(`BG: ${payload.bg} ${BG_UNITS} (${payload.t})`);
       state.bgs = [ ...state.bgs, payload ];
+      
+      // Last BG received
+      if (state.bgs.length === size) {
+        showBGs();
+      }
+      
+      // Update BG
       bgLabel.text = formatBG(getLast(state.bgs).bg);
       break;
 
@@ -78,6 +97,24 @@ const fetchBGs = () => {
   // Ask companion for latest BGs
   sendMessage({
     command: CMD_FETCH_BG,
+    size: 1,
     payload: {},
+  });
+};
+
+
+
+// FUNCTIONS
+const showBGs = () => {
+  const now = new Date().getTime() / 1000;
+  const then = now - graph.dt;
+
+  // Show all stored BGs
+  state.bgs.map((bg, i) => {
+    const bgEl = bgElements[i];
+    
+    bgEl.style.display = "inline";
+    bgEl.cx = (bg.t - then) / graph.dt * graph.width;
+    bgEl.cy = (BG_GRAPH_MAX - bg.bg) / graph.dBG * graph.height;
   });
 };

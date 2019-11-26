@@ -6,20 +6,40 @@
   viewport-fill: #000000;
 }
 
+#top {
+  width: 100%;
+  height: 20%;
+  x: 0;
+  y: 0;
+}
+
 #time {
   font-size: 32;
-  text-length: 32;
-  text-anchor: middle;
+  text-length: 5;
+  text-anchor: end;
   fill: #ffffff;
-  x: 100%-48;
-  y: 32;
+  x: 100%-10;
+  y: 50%+10;
 }
 
 #bg {
   font-size: 52;
-  text-length: 52;
-  text-anchor: middle;
+  text-length: 4;
+  text-anchor: start;
   fill: #ffffff;
-  x: 10%;
+  x: 10;
+  y: 50%+18;
+}
+
+#graph {
+  width: 100%;
+  height: 80%;
+  x: 0;
   y: 20%;
+}
+
+.bg {
+  display: none;
+  r: 1;
+  fill: #999999;
 }
