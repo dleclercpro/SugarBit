@@ -1,49 +1,83 @@
 import document from "document";
 import clock from "clock";
-import * as messaging from "messaging";
-import { BG_UNITS, MSG_TYPE_BG, MSG_TYPE_LAST_BG } from "../common/globals";
-import { zeroPad } from "../common/lib";
+import { peerSocket } from "messaging";
+import { BG_UNITS, CMD_FETCH_BG } from "../common/globals";
+import { sendMessage, formatTime, formatBG, getLast } from "../common/lib";
+
+
 
 // UI
 const timeLabel = document.getElementById("time");
 const bgLabel = document.getElementById("bg");
+
+
 
 // STATE
 const state = {
   bgs: [],
 };
 
+
+
+// CLOCK
 // Update the clock every second
 clock.granularity = "minutes";
 
 // On every clock tick
 clock.ontick = (e) => {
   const today = e.date;
-  const hour = zeroPad(today.getHours());
-  const min = zeroPad(today.getMinutes());
+  const hour = formatTime(today.getHours());
+  const minute = formatTime(today.getMinutes());
   
   // Update time on watch
-  timeLabel.text = `${hour}:${min}`;
+  timeLabel.text = `${hour}:${minute}`;
+};
+
+
+
+// MESSAGING
+// Messaging channel open
+peerSocket.onopen = (e) => {
+  fetchBGs();
+};
+
+// Messaging error
+peerSocket.onerror = (err) => {
+  console.error(`Connection error: ${err.code} - ${err.message}`);
 };
 
 // Message received from companion
-messaging.peerSocket.onmessage = (msg) => {
-  const [ msgType, msgTime, msgValue ] = msg.data;
+peerSocket.onmessage = (msg) => {
+  if (!msg.data) {
+    console.warn("Received message from companion without data.");
+    return;
+  }
   
+  // Destructure message
+  const { command, payload } = msg.data;
+
   // React according to message type
-  switch (msgType) {
-    case MSG_TYPE_BG:
-      state.bgs.push(`BG: ${msgValue} ${BG_UNITS} (${msgTime})`);
+  switch (command) {
+    case CMD_FETCH_BG:
+      //console.log(`BG: ${payload.bg} ${BG_UNITS} (${payload.t})`);
+      state.bgs = [ ...state.bgs, payload ];
+      bgLabel.text = formatBG(getLast(state.bgs).bg);
       break;
-      
-    case MSG_TYPE_LAST_BG:
-      console.log(`Last BG: ${msgValue} ${BG_UNITS} (${msgTime})`);
-      
-      // Update BG on watch
-      bgLabel.text = msgValue;
-      break;
-      
+
     default:
       console.warn("Unknown message received from companion.");
   }
+};
+
+// Fetch recent BGs from server
+const fetchBGs = () => {
+  
+  // Reset BGs
+  state.bgs = [];
+  
+  // Ask companion for latest BGs
+  sendMessage({
+    command: CMD_FETCH_BG,
+    payload: {},
+  });
 };

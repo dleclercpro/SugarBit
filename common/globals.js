@@ -1,6 +1,6 @@
+export const BG_COUNT = 288; // Number of BGs to store (24h worth of data)
 export const BG_UNITS = "mmol/L";
-export const BG_REFRESH_RATE = 60000; // ms
+export const BG_REFRESH_RATE = 5000; // ms
 
-// Message types between companion and device
-export const MSG_TYPE_BG = 100;
-export const MSG_TYPE_LAST_BG = 101;
+// Commands between companion and device
+export const CMD_FETCH_BG = 100;

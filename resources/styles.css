@@ -11,12 +11,13 @@
   text-length: 32;
   text-anchor: middle;
   fill: #ffffff;
-  x: 85%;
-  y: 15%;
+  x: 100%-48;
+  y: 32;
 }
 
 #bg {
   font-size: 52;
+  text-length: 52;
   text-anchor: middle;
   fill: #ffffff;
   x: 10%;

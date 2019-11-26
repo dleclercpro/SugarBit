@@ -1,69 +1,150 @@
-import * as messaging from "messaging";
+import { peerSocket } from "messaging";
 import { me } from "companion";
-import { BG_REFRESH_RATE, MSG_TYPE_BG, MSG_TYPE_LAST_BG } from "../common/globals";
+import { BG_COUNT, BG_REFRESH_RATE, CMD_FETCH_BG } from "../common/globals";
+import { sendMessage, sendMessages, getEpochTime, compareBGs } from "../common/lib";
 
+
+
+// SERVER
 const URL = "https://dleclerc.net/sugarscout/reports/";
 
 const REPORTS = {
-  "bg": "BG.json",
-  "history": "history.json",
-  "treatments": "treatments.json",
-  "errors": "errors.json",
+  bgs: "BG.json",
+  history: "history.json",
+  treatments: "treatments.json",
+  errors: "errors.json",
 };
 
 
-/**
- * CHECKPERMISSIONS
- * Make sure all the necessary permissions are granted for the app to work
- */
-const checkPermissions = () => {
-  return new Promise((resolve, reject) => {
-    if (!me.permissions.granted("access_internet")) {
-      console.log("Can't access the internet using the companion API.");
-      reject();
+
+// STATE
+const state = {
+  bgs: {
+    isFetched: false,
+    isError: false,
+    data: {},
+  },
+  buffer: [],
+};
+
+
+
+// PERMISSIONS
+const PERMISSIONS_NEEDED = ["access_internet"];
+
+const isGranted = (permission) => {
+    if (me.permissions.granted(permission)) {
+      console.log(`Permission granted: ${permission}`);
+      return true;
     }
-    
-    resolve();
-  })
+  
+  console.error(`Permission denied: ${permission}`);
+  return false;
 };
 
-/**
- * FETCHBGS
- * Fetch all recent BGs from server
- */
-const fetchBGs = () => {
-  return fetch(URL + REPORTS["bg"])
-    .then((response) => {
-      return response.json();
-    })
-    .then((json) => {
-      console.log("BGs fetched successfully.")
-      
-      // Send BGs individually to watch
-      if (messaging.peerSocket.readyState === messaging.peerSocket.OPEN) {
-        for (const t in json) {
-          messaging.peerSocket.send([MSG_TYPE_BG, t, json[t]]);
-        }
-      }
-    })
-    .catch((error) => {
-      console.error(`BGs could not be fetched: ${error}`);
-    });
+const checkPermissions = () => {
+  return PERMISSIONS_NEEDED.reduce((otherPermissionsGranted, permission) => {
+    return otherPermissionsGranted && isGranted(permission);
+  }, true);
 };
 
-/**
- * FETCHLASTBG
- * Send last BG to watch
- */
-const fetchLastBG = () => {
-  if (messaging.peerSocket.readyState === messaging.peerSocket.OPEN) {
-    messaging.peerSocket.send([MSG_TYPE_LAST_BG, "2019.11.27 - 15:55:55", 5.5]);
+
+
+// MESSAGING
+// Message received from device
+peerSocket.onmessage = (msg) => {
+  if (!msg.data) {
+    console.warn("Received message from device without data.");
+    return;
   }
-}
+  
+  // Destructure message
+  const { command, payload } = msg.data;
+
+  // React according to message type
+  switch (command) {
+    case CMD_FETCH_BG:
+      sendBGs();
+      break;
+
+    default:
+      console.warn("Unknown message received from device.");
+  }
+};
+
+// Keep sending messages
+peerSocket.onbufferedamountdecrease = () => {
+  sendMessages(state.buffer);
+};
+
+
+
+// FUNCTIONS
+// Fetch recent BGs from server
+const fetchBGs = () => {
+  console.log("Fetching BGs...");
+  
+  return fetch(URL + REPORTS.bgs).then((response) => {
+    return response.json();
+  }).then((json) => {
+    console.log("Fetched BGs successfully.");
+    
+    // Use epoch time for BGs, sort them and keep only the last 24h
+    let epochBGs = Object.keys(json).reduce((bgs, t) => {
+      return [
+        ...bgs,
+        { t: getEpochTime(t), bg: json[t] },
+      ];
+    }, []);
+    epochBGs.sort(compareBGs);
+    epochBGs = epochBGs.slice(-Math.min(epochBGs.length, BG_COUNT));
+    
+    // Update state
+    state.bgs = {
+      isFetched: true,
+      isError: false,
+      data: epochBGs,
+    };
+    
+  }).catch((error) => {
+    console.error(`BGs could not be fetched: ${error}`);
+    
+    // Update state
+    state.bgs = {
+      isFetched: false,
+      isError: true,
+      data: {},
+    };
+    
+    // Rethrow error for higher level handling
+    throw error;
+  });
+};
+
+// Fill buffer with fetched BGs
+const fillBufferWithBGs = () => {
+  state.buffer = state.bgs.data.map((bg) => {
+    return {
+      command: CMD_FETCH_BG,
+      payload: bg,
+    };
+  });
+};
+
+// Send BGs loaded in state to device
+const sendBGs = () => {
+  
+  // Fetch recent BGs from server
+  fetchBGs().then(() => {
+    fillBufferWithBGs();
+    sendMessages(state.buffer);
+    
+  }).catch((error) => {
+    console.error("Could not send BGs to device.");
+  });
+};
+
 
 
 // MAIN
-checkPermissions().then(() => fetchBGs()).then(() => {
-    fetchLastBG();
-    setInterval(fetchLastBG, BG_REFRESH_RATE);  
-});
+checkPermissions();
