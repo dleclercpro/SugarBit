@@ -17,7 +17,30 @@ const now = new Date();
 
 
 
-// DOM ELEMENTS
+// STATE
+const state = {
+  time: {
+    now: {
+      date: now,
+      epoch: now.getTime() / 1000, // s
+    },
+  },
+  bgs: [],
+};
+
+
+
+// GRAPH
+const graph = {
+  dBG: GRAPH_BG_MAX - GRAPH_BG_MIN,
+  dt: TIME_24_H,
+  width: GRAPH_WIDTH_RATIO * me.screen.width,
+  height: GRAPH_HEIGHT_RATIO * me.screen.height,
+};
+
+
+
+// DOM
 const ui = {
   top: {
     time: document.getElementById("time"),
@@ -41,25 +64,6 @@ const ui = {
 
 
 
-// GRAPH
-const graph = {
-  dBG: GRAPH_BG_MAX - GRAPH_BG_MIN,
-  dt: TIME_6_H,
-  width: GRAPH_WIDTH_RATIO * me.screen.width,
-  height: GRAPH_HEIGHT_RATIO * me.screen.height,
-};
-
-
-
-// STATE
-const state = {
-  now: now,
-  epoch: now.getTime() / 1000, // s
-  bgs: [],
-};
-
-
-
 // CLOCK
 // Update the clock every second
 clock.granularity = "seconds";
@@ -68,17 +72,19 @@ clock.granularity = "seconds";
 clock.ontick = (e) => {
   
   // Store current time in state
-  state.now = e.date;
-  state.epoch = e.date.getTime() / 1000; // s
+  state.time.now = {
+    date: e.date,
+    epoch: e.date.getTime() / 1000, // s
+  };
   
   // Every minute
-  if (state.now.getSeconds() === 0) {
+  if (e.date.getSeconds() === 0) {
     
     // Update time
     updateDisplayTime();
     
     // Every 5 minutes
-    if (state.now.getMinutes() % 5 === 0) {
+    if (e.date.getMinutes() % 5 === 0) {
 
       // Update BGs
       fetchBGs();
@@ -121,8 +127,8 @@ peerSocket.onmessage = (msg) => {
         console.log(`Received ${size} BG(s).`)
         
         // Keep only BGs from the last 24 hours
-        const { epoch } = state;
-        const then = epoch - TIME_24_H;
+        const { now } = state.time;
+        const then = now.epoch - TIME_24_H;
         state.bgs = filterBGs(then);
         
         // Update current BG
@@ -144,8 +150,9 @@ peerSocket.onmessage = (msg) => {
 // FUNCTIONS
 // Define current time
 const updateDisplayTime = () => {
-  const hour = formatTime(state.now.getHours());
-  const minute = formatTime(state.now.getMinutes());
+  const { now } = state.time;
+  const hour = formatTime(now.date.getHours());
+  const minute = formatTime(now.date.getMinutes());
   
   // Update its value
   ui.top.time.text = `${hour}:${minute}`;
@@ -153,7 +160,7 @@ const updateDisplayTime = () => {
 
 // Define current BG
 const updateDisplayBG = () => {
-  const { bgs } = state;
+  const { bgs, time: { now } } = state;
   let bg, lastBG;
   
   // Get last BGs
@@ -164,7 +171,7 @@ const updateDisplayBG = () => {
   }
   
   // Last BG and dBG
-  const isOld = bg ? bg.t < state.epoch - BG_MAX_AGE : true;
+  const isOld = bg ? bg.t < now.epoch - BG_MAX_AGE : true;
   const isDeltaValid = lastBG ? bg.t - lastBG.t < BG_MAX_DELTA : false;
   
   // Update current BG
@@ -191,13 +198,13 @@ const filterBGs = (then) => {
 
 // Fetch BGs
 const fetchBGs = () => {
-  const { epoch, bgs } = state;
+  const { bgs, time: { now } } = state;
   let then, bg;
   
   // No BGs fetched so far: fetch to fill graph
   // Otherwise: fetch newer ones
   if (bgs.length === 0) {
-    then = epoch - graph.dt;
+    then = now.epoch - graph.dt;
   } else {
     [ bg ] = bgs.slice(-1);
     then = bg.t;
@@ -216,8 +223,8 @@ const fetchBGs = () => {
 
 // Show BGs stored in state in graph
 const showBGs = () => {
-  const { epoch } = state;
-  const then = epoch - graph.dt;
+  const { now } = state.time;
+  const then = now.epoch - graph.dt;
   
   // Keep BGs from state which will fit in graph
   const bgs = filterBGs(then);
@@ -265,13 +272,13 @@ const showTargetRange = () => {
 
 // Show time axis
 const showTimeAxis = () => {
-  const { epoch } = state;
-  const then = epoch - graph.dt;
+  const { now } = state.time;
+  const then = now.epoch - graph.dt;
   let nHours = [];
   
   // Get last full hour as a date
   let lastHour = new Date();
-  lastHour.setTime(epoch * 1000);
+  lastHour.setTime(now.epoch * 1000);
   lastHour.setMinutes(0);
   lastHour.setSeconds(0);
   lastHour.setMilliseconds(0);

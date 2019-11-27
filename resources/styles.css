@@ -15,16 +15,16 @@
 }
 
 #top-left {
-  width: 50%;
+  width: 60%;
   height: 100%;
   x: 0;
   y: 0;
 }
 
 #top-right {
-  width: 50%;
+  width: 40%;
   height: 100%;
-  x: 50%;
+  x: 60%;
   y: 0;
 }
 
