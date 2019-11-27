@@ -87,7 +87,7 @@ peerSocket.onmessage = (msg) => {
         const nBGs = state.bgs.data.length;
         
         if (nBGs > 0) {
-          console.log(`Sending ${nBGs} BGs to device...`);
+          console.log(`Sending ${nBGs} BG(s) to device...`);
 
           fillBufferWithBGs();
           sendMessages(state.buffer);

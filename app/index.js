@@ -44,7 +44,7 @@ const ui = {
 // GRAPH
 const graph = {
   dBG: GRAPH_BG_MAX - GRAPH_BG_MIN,
-  dt: TIME_24_H,
+  dt: TIME_6_H,
   width: GRAPH_WIDTH_RATIO * me.screen.width,
   height: GRAPH_HEIGHT_RATIO * me.screen.height,
 };
@@ -76,7 +76,11 @@ clock.ontick = (e) => {
     
     // Update time
     updateDisplayTime();
+  }
 
+  // Every 5 minutes
+  if (state.now.getMinutes() % 5 === 0) {    
+    
     // Update BGs
     fetchBGs();
   }
@@ -108,11 +112,13 @@ peerSocket.onmessage = (msg) => {
   // React according to message type
   switch (command) {
     case CMD_FETCH_BG:
-      state.bgs = [ ...state.bgs, payload ];
+      
+      // Store new BG
+      state.bgs.push(payload);
       
       // Last BG received
       if (key === size) {
-        console.log(`Received ${size} BGs.`)
+        console.log(`Received ${size} BG(s).`)
         
         // Keep only BGs from the last 24 hours
         const { epoch } = state;
@@ -181,11 +187,16 @@ const updateDisplayBG = () => {
 // Fetch BGs
 const fetchBGs = () => {
   const { epoch, bgs } = state;
+  let then, bg;
   
   // No BGs fetched so far: fetch to fill graph
   // Otherwise: fetch newer ones
-  const [ bg ] = bgs.splice(-1);
-  const then = bgs.length === 0 ? epoch - graph.dt : bg.t;
+  if (bgs.length === 0) {
+    then = epoch - graph.dt;
+  } else {
+    [ bg ] = bgs.slice(-1);
+    then = bg.t;
+  }
   
   // Ask companion for BGs
   sendMessage({
@@ -210,9 +221,12 @@ const showBGs = () => {
   // Show all stored BGs
   ui.graph.bgs.map((el, i) => {
     
-    // No more BGs stored: hide element
+    // No more BGs stored
     if (i >= nBGs) {
+      
+      // Hide element
       hide(el);
+      
     } else {
       const bg = bgs[nBGs - 1 - i];
       
@@ -220,7 +234,7 @@ const showBGs = () => {
       el.cx = (bg.t - then) / graph.dt * graph.width;
       el.cy = (GRAPH_BG_MAX - bg.bg) / graph.dBG * graph.height;
       
-      // Color it
+      // Color element
       colorBG(el, bg.bg);
       
       // Show it
@@ -246,7 +260,7 @@ const showTargetRange = () => {
 
 // Show time axis
 const showTimeAxis = () => {
-  const { epoch }= state;
+  const { epoch } = state;
   const then = epoch - graph.dt;
   let nHours = [];
   
