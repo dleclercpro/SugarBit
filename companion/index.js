@@ -94,7 +94,7 @@ peerSocket.onmessage = (msg) => {
         }
 
       }).catch((error) => {
-        console.error("Could not send BGs to device.");
+        console.error(`Could not send BG(s) to device: ${error}`);
       });
       
       break;

@@ -76,13 +76,13 @@ clock.ontick = (e) => {
     
     // Update time
     updateDisplayTime();
-  }
-
-  // Every 5 minutes
-  if (state.now.getMinutes() % 5 === 0) {    
     
-    // Update BGs
-    fetchBGs();
+    // Every 5 minutes
+    if (state.now.getMinutes() % 5 === 0) {
+
+      // Update BGs
+      fetchBGs();
+    }
   }
 };
 
@@ -123,7 +123,7 @@ peerSocket.onmessage = (msg) => {
         // Keep only BGs from the last 24 hours
         const { epoch } = state;
         const then = epoch - TIME_24_H;
-        state.bgs = state.bgs.filter(bg => bg.t >= then);
+        state.bgs = filterBGs(then);
         
         // Update current BG
         updateDisplayBG();
@@ -184,6 +184,11 @@ const updateDisplayBG = () => {
   }
 };
 
+// Filter out BGs older than given time
+const filterBGs = (then) => {
+  return state.bgs.filter(bg => bg.t >= then);
+};
+
 // Fetch BGs
 const fetchBGs = () => {
   const { epoch, bgs } = state;
@@ -215,7 +220,7 @@ const showBGs = () => {
   const then = epoch - graph.dt;
   
   // Keep BGs from state which will fit in graph
-  const bgs = state.bgs.filter(bg => bg.t >= then);
+  const bgs = filterBGs(then);
   const nBGs = bgs.length;
 
   // Show all stored BGs
