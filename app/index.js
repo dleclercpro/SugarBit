@@ -2,15 +2,28 @@ import document from "document";
 import clock from "clock";
 import { me } from "device";
 import { peerSocket } from "messaging";
-import { TIME_3_H, TIME_6_H, TIME_12_H, TIME_24_H, BG_UNITS, GRAPH_BG_LOW, GRAPH_BG_HIGH, GRAPH_BG_MIN, GRAPH_BG_MAX, GRAPH_WIDTH_RATIO, GRAPH_HEIGHT_RATIO, CMD_FETCH_BG } from "../common/globals";
-import { sendMessage, formatTime, formatBG, getLast, getCurrentTime, colorBGElement } from "../common/lib";
+import { TIME_3_H, TIME_6_H, TIME_12_H, TIME_24_H,
+  GRAPH_BG_LOW, GRAPH_BG_HIGH, GRAPH_BG_MIN, GRAPH_BG_MAX, GRAPH_WIDTH_RATIO, GRAPH_HEIGHT_RATIO,
+  CMD_FETCH_BG,
+  BG_UNITS, BG_MAX_AGE, BG_MAX_DELTA } from "../common/constants";
+import { sendMessage } from "../common/messages";
+import { formatTime, formatBG, formatdBG } from "../common/format";
+import { show, hide, colorBG } from "../common/ui";
+
+
+
+// INITIAL TIME
+const now = new Date();
 
 
 
 // DOM ELEMENTS
 const ui = {
-  time: document.getElementById("time"),
-  bg: document.getElementById("bg"),
+  top: {
+    time: document.getElementById("time"),
+    bg: document.getElementById("bg"),
+    dbg: document.getElementById("dbg"),
+  },
   graph: {
     bgs: document.getElementsByClassName("bg"),
     targets: {
@@ -40,6 +53,8 @@ const graph = {
 
 // STATE
 const state = {
+  now: now,
+  epoch: now.getTime() / 1000, // s
   bgs: [],
 };
 
@@ -47,19 +62,24 @@ const state = {
 
 // CLOCK
 // Update the clock every second
-clock.granularity = "minutes";
+clock.granularity = "seconds";
 
 // On every clock tick
 clock.ontick = (e) => {
-  const today = e.date;
-  const hour = formatTime(today.getHours());
-  const minute = formatTime(today.getMinutes());
   
-  // Update time
-  ui.time.text = `${hour}:${minute}`;
+  // Store current time in state
+  state.now = e.date;
+  state.epoch = e.date.getTime() / 1000; // s
   
-  // Update BGs
-  fetchBGs();
+  // Every minute
+  if (state.now.getSeconds() === 0) {
+    
+    // Update time
+    updateDisplayTime();
+
+    // Update BGs
+    fetchBGs();
+  }
 };
 
 
@@ -95,14 +115,12 @@ peerSocket.onmessage = (msg) => {
         console.log(`Received ${size} BGs.`)
         
         // Keep only BGs from the last 24 hours
-        const now = getCurrentTime();
-        const then = now - TIME_24_H;
+        const { epoch } = state;
+        const then = epoch - TIME_24_H;
         state.bgs = state.bgs.filter(bg => bg.t >= then);
         
         // Update current BG
-        const bg = getLast(state.bgs).bg;
-        ui.bg.text = formatBG(bg);
-        colorBGElement(ui.bg, bg);
+        updateDisplayBG();
         
         // Build graph
         showBGs();
@@ -118,13 +136,56 @@ peerSocket.onmessage = (msg) => {
 
 
 // FUNCTIONS
+// Define current time
+const updateDisplayTime = () => {
+  const hour = formatTime(state.now.getHours());
+  const minute = formatTime(state.now.getMinutes());
+  
+  // Update its value
+  ui.top.time.text = `${hour}:${minute}`;
+};
+
+// Define current BG
+const updateDisplayBG = () => {
+  const { bgs } = state;
+  let bg, lastBG;
+  
+  // Get last BGs
+  if (bgs.length > 1) {
+    [ lastBG, bg ] = bgs.slice(-2);
+  } else if (bgs.length > 0) {
+     [ bg ] = bgs.slice(-1);
+  }
+  
+  // Last BG and dBG
+  const isOld = bg ? bg.t < state.epoch - BG_MAX_AGE : true;
+  const isDeltaValid = lastBG ? bg.t - lastBG.t < BG_MAX_DELTA : false;
+  
+  // Update current BG
+  if (bg) {
+    ui.top.bg.text = formatBG(bg.bg);
+    colorBG(ui.top.bg, bg.bg);  
+  } else {
+    hide(ui.top.bg);
+  }
+  
+  // Update last dBG
+  if (lastBG && !isOld && isDeltaValid) {
+    ui.top.dbg.text = `(${formatdBG(bg.bg - lastBG.bg)})`;
+    colorBG(ui.top.dbg, bg.bg);
+  } else {
+    hide(ui.top.dbg);
+  }
+};
+
 // Fetch BGs
 const fetchBGs = () => {
-  const now = getCurrentTime();
+  const { epoch, bgs } = state;
   
   // No BGs fetched so far: fetch to fill graph
   // Otherwise: fetch newer ones
-  const then = state.bgs.length === 0 ? now - graph.dt : getLast(state.bgs).t;
+  const [ bg ] = bgs.splice(-1);
+  const then = bgs.length === 0 ? epoch - graph.dt : bg.t;
   
   // Ask companion for BGs
   sendMessage({
@@ -139,8 +200,8 @@ const fetchBGs = () => {
 
 // Show BGs stored in state in graph
 const showBGs = () => {
-  const now = getCurrentTime();
-  const then = now - graph.dt;
+  const { epoch } = state;
+  const then = epoch - graph.dt;
   
   // Keep BGs from state which will fit in graph
   const bgs = state.bgs.filter(bg => bg.t >= then);
@@ -151,7 +212,7 @@ const showBGs = () => {
     
     // No more BGs stored: hide element
     if (i >= nBGs) {
-      el.style.display = "none";
+      hide(el);
     } else {
       const bg = bgs[nBGs - 1 - i];
       
@@ -160,10 +221,10 @@ const showBGs = () => {
       el.cy = (GRAPH_BG_MAX - bg.bg) / graph.dBG * graph.height;
       
       // Color it
-      colorBGElement(el, bg.bg);
+      colorBG(el, bg.bg);
       
       // Show it
-      el.style.display = "inline";
+      show(el);
     }
   });
 };
@@ -174,23 +235,24 @@ const showTargetRange = () => {
   const lowY = (GRAPH_BG_MAX - GRAPH_BG_LOW) / graph.dBG * graph.height;
   const highY = (GRAPH_BG_MAX - GRAPH_BG_HIGH) / graph.dBG * graph.height;
 
-  low.style.display = "inline";
-  high.style.display = "inline";
   low.y1 = lowY;
   low.y2 = lowY;
   high.y1 = highY;
   high.y2 = highY;
+  
+  show(low);
+  show(high);
 };
 
 // Show time axis
 const showTimeAxis = () => {
-  const now = getCurrentTime();
-  const then = now - graph.dt;
+  const { epoch }= state;
+  const then = epoch - graph.dt;
   let nHours = [];
   
   // Get last full hour as a date
   let lastHour = new Date();
-  lastHour.setTime(now * 1000);
+  lastHour.setTime(epoch * 1000);
   lastHour.setMinutes(0);
   lastHour.setSeconds(0);
   lastHour.setMilliseconds(0);
@@ -231,17 +293,18 @@ const showTimeAxis = () => {
     const tickX = (time - then) / graph.dt * graph.width;
     tick.x1 = tickX;
     tick.x2 = tickX;
-    tick.style.display = "inline";
+    show(tick);
     
     const label = ui.graph.axes.time.labels[i];
     label.text = `${hour}:${minute}`;
     label.x = tickX - 3;
-    label.style.display = "inline";
+    show(label);
   });
 };
 
 
 
 // MAIN
+updateDisplayTime();
 showTargetRange();
 showTimeAxis();

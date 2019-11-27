@@ -1,7 +1,9 @@
 import { peerSocket } from "messaging";
 import { me } from "companion";
-import { BG_REFRESH_RATE, CMD_FETCH_BG } from "../common/globals";
-import { sendMessage, sendMessages, getEpochTime, compareBGs } from "../common/lib";
+import { BG_REFRESH_RATE, CMD_FETCH_BG } from "../common/constants";
+import { compareBGs } from "../common/lib";
+import { getEpochTime } from "../common/time";
+import { sendMessage, sendMessages } from "../common/messages";
 
 
 
@@ -14,6 +16,20 @@ const REPORTS = {
   treatments: "treatments.json",
   errors: "errors.json",
 };
+
+
+
+// REQUESTS
+const REQUEST_HEADERS = new Headers();
+REQUEST_HEADERS.append("pragma", "no-cache");
+REQUEST_HEADERS.append("cache-control", "no-cache");
+
+const REQUEST_INIT = {
+  method: "GET",
+  headers: REQUEST_HEADERS,
+};
+
+const REQUEST = new Request(URL + REPORTS.bgs);
 
 
 
@@ -100,7 +116,7 @@ peerSocket.onbufferedamountdecrease = () => {
 const fetchBGs = (after) => {
   console.log(`Fetching BGs newer than: ${after}`);
   
-  return fetch(URL + REPORTS.bgs).then(response => response.json()).then(json => {
+  return fetch(REQUEST, REQUEST_INIT).then(response => response.json()).then(json => {
     console.log("Fetched BGs successfully.");
     
     // Use epoch time for BGs, keep only those after given time, sort, and store them

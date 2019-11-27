@@ -1,7 +1,12 @@
 <svg class="background">
   <section id="top">
-    <text id="time" />
-    <text id="bg" />
+    <section id="top-left">
+      <text id="bg" />
+      <text id="dbg" />      
+    </section>
+    <section id="top-right">
+      <text id="time" />
+    </section>
   </section>
   <section id="graph">
     <line id="target-low" class="target" />
