@@ -2,8 +2,8 @@ import document from "document";
 import clock from "clock";
 import { me } from "device";
 import { peerSocket } from "messaging";
-import { TIME_6_H, TIME_24_H, BG_UNITS, GRAPH_TIMESCALES, GRAPH_BG_LOW, GRAPH_BG_HIGH, GRAPH_BG_MIN, GRAPH_BG_MAX, GRAPH_WIDTH_RATIO, GRAPH_HEIGHT_RATIO, CMD_FETCH_BG } from "../common/globals";
-import { sendMessage, formatTime, formatBG, getLast, getCurrentTime } from "../common/lib";
+import { TIME_3_H, TIME_6_H, TIME_12_H, TIME_24_H, BG_UNITS, GRAPH_BG_LOW, GRAPH_BG_HIGH, GRAPH_BG_MIN, GRAPH_BG_MAX, GRAPH_WIDTH_RATIO, GRAPH_HEIGHT_RATIO, CMD_FETCH_BG } from "../common/globals";
+import { sendMessage, formatTime, formatBG, getLast, getCurrentTime, colorBGElement } from "../common/lib";
 
 
 
@@ -16,6 +16,12 @@ const ui = {
     targets: {
       low: document.getElementById("target-low"),
       high: document.getElementById("target-high"),
+    },
+    axes: {
+      time: {
+        ticks: document.getElementsByClassName("time-tick"),
+        labels: document.getElementsByClassName("time-tick-label"),
+      },
     },
   },
 };
@@ -94,7 +100,9 @@ peerSocket.onmessage = (msg) => {
         state.bgs = state.bgs.filter(bg => bg.t >= then);
         
         // Update current BG
-        ui.bg.text = formatBG(getLast(state.bgs).bg);
+        const bg = getLast(state.bgs).bg;
+        ui.bg.text = formatBG(bg);
+        colorBGElement(ui.bg, bg);
         
         // Build graph
         showBGs();
@@ -147,24 +155,21 @@ const showBGs = () => {
     } else {
       const bg = bgs[nBGs - 1 - i];
       
-      // Position BGs in graph
+      // Position BG in graph
       el.cx = (bg.t - then) / graph.dt * graph.width;
       el.cy = (GRAPH_BG_MAX - bg.bg) / graph.dBG * graph.height;
       
-      // Color them
-      if (bg.bg >= GRAPH_BG_HIGH) {
-        el.style.fill = "#ff9d2f";
-      } else if (bg.bg <= GRAPH_BG_LOW) {
-        el.style.fill = "#e50000";
-      }
+      // Color it
+      colorBGElement(el, bg.bg);
       
+      // Show it
       el.style.display = "inline";
     }
   });
 };
 
 // Show target range
-const showTargetRange= () => {
+const showTargetRange = () => {
   const { low, high } = ui.graph.targets;
   const lowY = (GRAPH_BG_MAX - GRAPH_BG_LOW) / graph.dBG * graph.height;
   const highY = (GRAPH_BG_MAX - GRAPH_BG_HIGH) / graph.dBG * graph.height;
@@ -177,7 +182,66 @@ const showTargetRange= () => {
   high.y2 = highY;
 };
 
+// Show time axis
+const showTimeAxis = () => {
+  const now = getCurrentTime();
+  const then = now - graph.dt;
+  let nHours = [];
+  
+  // Get last full hour as a date
+  let lastHour = new Date();
+  lastHour.setTime(now * 1000);
+  lastHour.setMinutes(0);
+  lastHour.setSeconds(0);
+  lastHour.setMilliseconds(0);
+  
+  // Choose axis ticks based on chosen graph timescale
+  switch (graph.dt) {
+    case TIME_3_H:
+      nHours = [-2, -1, 0];
+      break;
+    case TIME_6_H:
+      nHours = [-4, -2, 0];
+      break;
+    case TIME_12_H:
+      nHours = [-8, -4, 0];
+      break;
+    case TIME_24_H:
+      nHours = [-16, -8, 0];
+      break;
+    default:
+      console.error("Cannot draw time axis: wrong timescale.");
+      return;
+  }
+  
+  // Get axis ticks in epoch time (s)
+  const epochDates = nHours.map((n) => {
+    const date = new Date();
+    date.setTime(lastHour.getTime() + n * 60 * 60 * 1000);
+    
+    return date;
+  });
+  
+  ui.graph.axes.time.ticks.map((tick, i) => {
+    const date = epochDates[i];
+    const time = date.getTime() / 1000;
+    const hour = formatTime(date.getHours());
+    const minute = formatTime(date.getMinutes());
+    
+    const tickX = (time - then) / graph.dt * graph.width;
+    tick.x1 = tickX;
+    tick.x2 = tickX;
+    tick.style.display = "inline";
+    
+    const label = ui.graph.axes.time.labels[i];
+    label.text = `${hour}:${minute}`;
+    label.x = tickX - 3;
+    label.style.display = "inline";
+  });
+};
+
 
 
 // MAIN
 showTargetRange();
+showTimeAxis();

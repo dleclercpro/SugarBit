@@ -295,4 +295,12 @@
     <circle class="bg" />
     <circle class="bg" />
   </section>
+  <section id="time-axis">
+    <line class="time-tick" />
+    <line class="time-tick" />
+    <line class="time-tick" />
+    <text class="time-tick-label" />
+    <text class="time-tick-label" />
+    <text class="time-tick-label" />
+  </section>
 </svg>

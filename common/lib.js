@@ -1,4 +1,5 @@
 import { peerSocket } from "messaging";
+import { GRAPH_BG_LOW, GRAPH_BG_HIGH } from "./globals";
 
 export const formatTime = (t) => {
   return t < 10 ? "0" + t : t;
@@ -64,3 +65,13 @@ export const sendMessages = (msgs) => {
     setTimeout(sendMessage(msgs.shift()), 1);
   }
 };
+
+export const colorBGElement = (el, bg) => {
+  if (bg >= GRAPH_BG_HIGH) {
+    el.style.fill = "#ff9d2f";
+  } else if (bg <= GRAPH_BG_LOW) {
+    el.style.fill = "#e50000";
+  } else {
+    el.style.fill = "#999999";
+  }
+}

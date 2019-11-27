@@ -11,9 +11,6 @@ export const GRAPH_BG_MIN = 0;             // mmol/L
 export const GRAPH_BG_MAX = 16;            // mmol/L
 export const GRAPH_BG_LOW = 4.2;           // mmol/L
 export const GRAPH_BG_HIGH = 8.0;          // mmol/L
-export const GRAPH_TIMESCALES = [
-  TIME_3_H, TIME_6_H, TIME_12_H, TIME_24_H // s
-];
 
 // Commands between companion and device
 export const CMD_FETCH_BG = 100;

@@ -6,6 +6,7 @@
   viewport-fill: #000000;
 }
 
+/* Sections */
 #top {
   width: 100%;
   height: 20%;
@@ -13,6 +14,21 @@
   y: 0;
 }
 
+#graph {
+  width: 100%;
+  height: 80%-15;
+  x: 0;
+  y: 20%;
+}
+
+#time-axis {
+  width: 100%;
+  height: 15;
+  x: 0;
+  y: 100%-15;
+}
+
+/* Sub-elements */
 #time {
   font-size: 32;
   text-length: 5;
@@ -24,24 +40,16 @@
 
 #bg {
   font-size: 52;
-  text-length: 4;
+  text-length: 7;
   text-anchor: start;
   fill: #ffffff;
   x: 10;
   y: 50%+18;
 }
 
-#graph {
-  width: 100%;
-  height: 80%;
-  x: 0;
-  y: 20%;
-}
-
 .bg {
   display: none;
   r: 2;
-  fill: #999999;
 }
 
 .target {
@@ -60,4 +68,25 @@
 
 #target-low {
   fill: #e50000;
+}
+
+.time-tick {
+  display: none;
+  fill: #ffffff;
+  opacity: 1;
+  stroke-width: 2;
+  x1: 0;
+  y1: 0;
+  x2: 0;
+  y2: 100%;
+}
+
+.time-tick-label {
+  display: none;
+  font-size: 12;
+  text-length: 5;
+  text-anchor: end;
+  fill: #ffffff;
+  x: 0;
+  y: 50%+3;
 }
