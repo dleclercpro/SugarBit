@@ -1,7 +1,7 @@
 <svg class="background">
   <section id="top">
     <section id="top-left">
-      <text id="bg" />
+      <text id="bg">---</text>
       <text id="dbg" />
       <text id="error" />
     </section>

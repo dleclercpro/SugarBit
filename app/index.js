@@ -6,7 +6,7 @@ import { TIME_3_H, TIME_6_H, TIME_12_H, TIME_24_H,
   GRAPH_BG_LOW, GRAPH_BG_HIGH, GRAPH_BG_MIN, GRAPH_BG_MAX, GRAPH_WIDTH_RATIO, GRAPH_HEIGHT_RATIO,
   BG_UNITS, BG_MAX_AGE, BG_MAX_DELTA, BG_NONE } from "../common/constants";
 import { CMD_FETCH_BGS, CMD_SYNC, CMD_DISPLAY_ERROR, getCommands } from "../common/commands";
-import { sendMessages } from "../common/messages";
+import { sendMessage } from "../common/messages";
 import { formatTime, formatBG, formatdBG } from "../common/format";
 import { show, hide, colorBG } from "../common/ui";
 
@@ -25,12 +25,12 @@ const state = {
       date: now,
       epoch: now.getTime() / 1000
     },
-    sync: {
-      date: zero,
-      epoch: zero.getTime() / 1000
-    },
   },
-  bgs: [],
+  bgs: {
+    isFetching: false, // Is device currently waiting for BG fetching?
+    last: null,        // Latest BG
+    el: 0,             // SVG element index to use for next BG
+  },
 };
 
 
@@ -38,7 +38,7 @@ const state = {
 // GRAPH
 const graph = {
   dBG: GRAPH_BG_MAX - GRAPH_BG_MIN,
-  dt: TIME_6_H,
+  dt: TIME_24_H,
   width: GRAPH_WIDTH_RATIO * me.screen.width,
   height: GRAPH_HEIGHT_RATIO * me.screen.height,
 };
@@ -71,8 +71,8 @@ const ui = {
 
 
 // CLOCK
-// Update the clock every second
-clock.granularity = "seconds";
+// Update the clock every minute
+clock.granularity = "minutes";
 
 // On every clock tick
 clock.ontick = (e) => {
@@ -82,20 +82,13 @@ clock.ontick = (e) => {
     date: e.date,
     epoch: e.date.getTime() / 1000, // s
   };
+    
+  // Update display time and time axis
+  updateDisplayTime();
+  showTimeAxis();
   
-  // Every minute
-  if (e.date.getSeconds() === 0) {
-    
-    // Update time
-    updateDisplayTime();
-    
-    // Every 5 minutes
-    if (e.date.getMinutes() % 5 === 0) {
-
-      // Update BGs
-      fetchBGs();
-    }
-  }
+  // Fetch BGs
+  fetchBGs();
 };
 
 
@@ -113,40 +106,29 @@ peerSocket.onerror = (err) => {
 
 // Message received from companion
 peerSocket.onmessage = (msg) => {
-  if (!msg.data) {
-    console.warn("Received message from companion without data.");
-    return;
-  }
-  
-  // Destructure message
   const { command, key, size, payload } = msg.data;
 
   // React according to message type
   switch (command) {
     case CMD_FETCH_BGS:
+      const bg = payload;
       
-      // Store new BG
-      state.bgs.push(payload);
+      // Show newly received BG
+      showBG(bg);
+      
+      // Update last BG
+      state.bgs.last = bg;
       
       // Last BG received
       if (key === size) {
-        console.log(`Received ${size} BG(s).`)
+        console.log(`Received ${size} BG(s).`);
         
-        // Keep only BGs from the last 24 hours
-        const { now } = state.time;
-        const then = now.epoch - TIME_24_H;
-        state.bgs = filterBGs(then);
+        // Not fetching anymore
+        state.bgs.isFetching = false;
         
         // Update current BG
-        updateDisplayBG();
-        
-        // Build graph
-        showBGs();
+        updateDisplayBG(bg);
       }
-      return;
-      
-    case CMD_SYNC:
-      state.sync = payload;
       return;
       
     case CMD_DISPLAY_ERROR:
@@ -167,21 +149,21 @@ peerSocket.onmessage = (msg) => {
 // FUNCTIONS
 // Fetch BGs
 const fetchBGs = () => {
-  const { bgs, time: { now } } = state;
-  let then, bg;
   
-  // No BGs fetched so far: fetch to fill graph
-  // Otherwise: fetch newer ones
-  if (bgs.length === 0) {
-    then = now.epoch - graph.dt;
-  } else {
-    [ bg ] = bgs.slice(-1);
-    then = bg.t;
+  // Fetch only if not currently doing it
+  if (!state.bgs.isFetching) {
+    const { bgs: { last }, time: { now } } = state;
+
+    // No BGs fetched so far: fetch to fill graph
+    // Otherwise: fetch newer ones
+    const then = last ? last.t : now.epoch - graph.dt;
+
+    // Ask companion for BGs
+    const [ cmd ] = getCommands(CMD_FETCH_BGS, [ { after: then } ]);
+    
+    // Fetching currently
+    state.bgs.isFetching = sendMessage(cmd);
   }
-  
-  // Ask companion for BGs
-  const cmds = getCommands(CMD_FETCH_BGS, [ { after: then } ]);
-  sendMessages(cmds);
 };
 
 
@@ -197,20 +179,12 @@ const updateDisplayTime = () => {
 
 
 // Define current BG
-const updateDisplayBG = () => {
-  const { bgs, time: { now } } = state;
-  let bg, lastBG;
-  
-  // Get last BGs
-  if (bgs.length > 1) {
-    [ lastBG, bg ] = bgs.slice(-2);
-  } else if (bgs.length > 0) {
-     [ bg ] = bgs.slice(-1);
-  }
+const updateDisplayBG = (bg) => {
+  const { bgs: { last }, time: { now } } = state;
   
   // Last BG and dBG
   const isOld = bg ? bg.t < now.epoch - BG_MAX_AGE : true;
-  const isDeltaValid = lastBG ? bg.t - lastBG.t < BG_MAX_DELTA : false;
+  const isDeltaValid = last ? bg.t - last.t < BG_MAX_DELTA : false;
   
   // Update current BG
   if (bg) {
@@ -221,8 +195,8 @@ const updateDisplayBG = () => {
   }
   
   // Update last dBG
-  if (lastBG && !isOld && isDeltaValid) {
-    ui.top.dbg.text = `(${formatdBG(bg.bg - lastBG.bg)})`;
+  if (!isOld && isDeltaValid) {
+    ui.top.dbg.text = `(${formatdBG(bg.bg - last.bg)})`;
     colorBG(ui.top.dbg, bg.bg);
   } else {
     hide(ui.top.dbg);
@@ -230,44 +204,24 @@ const updateDisplayBG = () => {
 };
 
 
-// Filter out BGs older than given time
-const filterBGs = (then) => {
-  return state.bgs.filter(bg => bg.t >= then);
-};
-
-
-// Show BGs stored in state in graph
-const showBGs = () => {
-  const { now } = state.time;
+// Display BG in graph
+const showBG = (bg) => {
+  const { time: { now } } = state;
   const then = now.epoch - graph.dt;
   
-  // Keep BGs from state which will fit in graph
-  const bgs = filterBGs(then);
-  const nBGs = bgs.length;
+  // Get SVG element to use and increment index
+  const el = ui.graph.bgs[state.bgs.el];
+  state.bgs.el++;
+  
+  // Position BG in graph
+  el.cx = (bg.t - then) / graph.dt * graph.width;
+  el.cy = (GRAPH_BG_MAX - bg.bg) / graph.dBG * graph.height;
 
-  // Show all stored BGs
-  ui.graph.bgs.map((el, i) => {
-    
-    // No more BGs stored
-    if (i >= nBGs) {
-      
-      // Hide element
-      hide(el);
-      
-    } else {
-      const bg = bgs[nBGs - 1 - i];
-      
-      // Position BG in graph
-      el.cx = (bg.t - then) / graph.dt * graph.width;
-      el.cy = (GRAPH_BG_MAX - bg.bg) / graph.dBG * graph.height;
-      
-      // Color element
-      colorBG(el, bg.bg);
-      
-      // Show it
-      show(el);
-    }
-  });
+  // Color corresponding element
+  colorBG(el, bg.bg);
+
+  // Show it
+  show(el);
 };
 
 
@@ -331,7 +285,7 @@ const showTimeAxis = () => {
     
     const label = ui.graph.axes.time.labels[i];
     label.text = `${hour}:${minute}`;
-    label.x = tickX - 3;
+    label.x = tickX - 5;
     show(label);
   });
 };
@@ -339,6 +293,5 @@ const showTimeAxis = () => {
 
 
 // MAIN
-updateDisplayTime();
 showTargetRange();
 showTimeAxis();

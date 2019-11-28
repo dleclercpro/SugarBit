@@ -62,12 +62,6 @@ peerSocket.onerror = (err) => {
 
 // Message received from device
 peerSocket.onmessage = (msg) => {
-  if (!msg.data) {
-    console.warn("Received message from device without data.");
-    return;
-  }
-  
-  // Destructure message
   const { command, key, size, payload } = msg.data;
 
   // React according to message type

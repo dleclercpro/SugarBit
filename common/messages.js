@@ -1,11 +1,14 @@
 import { peerSocket } from "messaging";
 
 // Send message to device/companion
-const sendMessage = (msg) => {
+export const sendMessage = (msg) => {
   if (peerSocket.readyState === peerSocket.OPEN) {
     peerSocket.send(msg);
     return true;
   }
+  
+  // Could not send message
+  console.warn("Trying to send message while channel is closed.");
   return false;
 };
 
@@ -19,12 +22,8 @@ export const sendMessages = (msgs) => {
     if (msgs.length === 0) {
       return;
     }
-      
+     
     // Send messages in buffer (FIFO)
-    if (sendMessage(msgs[0])) {
-      
-      // Remove message if sent successfully
-      msgs.shift();
-    }
+    sendMessage(msgs.shift());
   }
 };
