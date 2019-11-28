@@ -1,15 +1,11 @@
 import { peerSocket } from "messaging";
 
 // Send message to device/companion
-export const sendMessage = (msg) => {
+const sendMessage = (msg) => {
   if (peerSocket.readyState === peerSocket.OPEN) {
     peerSocket.send(msg);
-    
-    // Message was successfully sent
     return true;
   }
-  
-  // Message could not be sent (channel not open)
   return false;
 };
 
@@ -24,7 +20,11 @@ export const sendMessages = (msgs) => {
       return;
     }
       
-    // Send messages in buffer FIFO, giving app some time to breath
-    setTimeout(sendMessage(msgs.shift()), 1);
+    // Send messages in buffer (FIFO)
+    if (sendMessage(msgs[0])) {
+      
+      // Remove message if sent successfully
+      msgs.shift();
+    }
   }
 };

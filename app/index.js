@@ -4,9 +4,9 @@ import { me } from "device";
 import { peerSocket } from "messaging";
 import { TIME_3_H, TIME_6_H, TIME_12_H, TIME_24_H,
   GRAPH_BG_LOW, GRAPH_BG_HIGH, GRAPH_BG_MIN, GRAPH_BG_MAX, GRAPH_WIDTH_RATIO, GRAPH_HEIGHT_RATIO,
-  CMD_FETCH_BG,
-  BG_UNITS, BG_MAX_AGE, BG_MAX_DELTA } from "../common/constants";
-import { sendMessage } from "../common/messages";
+  BG_UNITS, BG_MAX_AGE, BG_MAX_DELTA, BG_NONE } from "../common/constants";
+import { CMD_FETCH_BGS, CMD_SYNC, CMD_DISPLAY_ERROR, getCommands } from "../common/commands";
+import { sendMessages } from "../common/messages";
 import { formatTime, formatBG, formatdBG } from "../common/format";
 import { show, hide, colorBG } from "../common/ui";
 
@@ -14,6 +14,7 @@ import { show, hide, colorBG } from "../common/ui";
 
 // INITIAL TIME
 const now = new Date();
+const zero = new Date(0);
 
 
 
@@ -22,7 +23,11 @@ const state = {
   time: {
     now: {
       date: now,
-      epoch: now.getTime() / 1000, // s
+      epoch: now.getTime() / 1000
+    },
+    sync: {
+      date: zero,
+      epoch: zero.getTime() / 1000
     },
   },
   bgs: [],
@@ -33,7 +38,7 @@ const state = {
 // GRAPH
 const graph = {
   dBG: GRAPH_BG_MAX - GRAPH_BG_MIN,
-  dt: TIME_24_H,
+  dt: TIME_6_H,
   width: GRAPH_WIDTH_RATIO * me.screen.width,
   height: GRAPH_HEIGHT_RATIO * me.screen.height,
 };
@@ -46,6 +51,7 @@ const ui = {
     time: document.getElementById("time"),
     bg: document.getElementById("bg"),
     dbg: document.getElementById("dbg"),
+    error: document.getElementById("error"),
   },
   graph: {
     bgs: document.getElementsByClassName("bg"),
@@ -117,7 +123,7 @@ peerSocket.onmessage = (msg) => {
 
   // React according to message type
   switch (command) {
-    case CMD_FETCH_BG:
+    case CMD_FETCH_BGS:
       
       // Store new BG
       state.bgs.push(payload);
@@ -137,8 +143,19 @@ peerSocket.onmessage = (msg) => {
         // Build graph
         showBGs();
       }
+      return;
       
-      break;
+    case CMD_SYNC:
+      state.sync = payload;
+      return;
+      
+    case CMD_DISPLAY_ERROR:
+      console.error(`Received error: ${payload}`);
+      
+      // Update error message and show it
+      ui.top.error.text = payload;
+      show(ui.top.error);
+      return;
 
     default:
       console.warn("Unknown message received from companion.");
@@ -148,6 +165,26 @@ peerSocket.onmessage = (msg) => {
 
 
 // FUNCTIONS
+// Fetch BGs
+const fetchBGs = () => {
+  const { bgs, time: { now } } = state;
+  let then, bg;
+  
+  // No BGs fetched so far: fetch to fill graph
+  // Otherwise: fetch newer ones
+  if (bgs.length === 0) {
+    then = now.epoch - graph.dt;
+  } else {
+    [ bg ] = bgs.slice(-1);
+    then = bg.t;
+  }
+  
+  // Ask companion for BGs
+  const cmds = getCommands(CMD_FETCH_BGS, [ { after: then } ]);
+  sendMessages(cmds);
+};
+
+
 // Define current time
 const updateDisplayTime = () => {
   const { now } = state.time;
@@ -157,6 +194,7 @@ const updateDisplayTime = () => {
   // Update its value
   ui.top.time.text = `${hour}:${minute}`;
 };
+
 
 // Define current BG
 const updateDisplayBG = () => {
@@ -179,7 +217,7 @@ const updateDisplayBG = () => {
     ui.top.bg.text = formatBG(bg.bg);
     colorBG(ui.top.bg, bg.bg);  
   } else {
-    hide(ui.top.bg);
+    ui.top.bg.text = BG_NONE;
   }
   
   // Update last dBG
@@ -191,35 +229,12 @@ const updateDisplayBG = () => {
   }
 };
 
+
 // Filter out BGs older than given time
 const filterBGs = (then) => {
   return state.bgs.filter(bg => bg.t >= then);
 };
 
-// Fetch BGs
-const fetchBGs = () => {
-  const { bgs, time: { now } } = state;
-  let then, bg;
-  
-  // No BGs fetched so far: fetch to fill graph
-  // Otherwise: fetch newer ones
-  if (bgs.length === 0) {
-    then = now.epoch - graph.dt;
-  } else {
-    [ bg ] = bgs.slice(-1);
-    then = bg.t;
-  }
-  
-  // Ask companion for BGs
-  sendMessage({
-    command: CMD_FETCH_BG,
-    key: 1,
-    size: 1,
-    payload: {
-      after: then,
-    },
-  });
-};
 
 // Show BGs stored in state in graph
 const showBGs = () => {
@@ -255,6 +270,7 @@ const showBGs = () => {
   });
 };
 
+
 // Show target range
 const showTargetRange = () => {
   const { low, high } = ui.graph.targets;
@@ -270,18 +286,13 @@ const showTargetRange = () => {
   show(high);
 };
 
+
 // Show time axis
 const showTimeAxis = () => {
   const { now } = state.time;
   const then = now.epoch - graph.dt;
+  const lastHour = new Date(Math.floor(now.epoch / 3600) * 3600 * 1000);
   let nHours = [];
-  
-  // Get last full hour as a date
-  let lastHour = new Date();
-  lastHour.setTime(now.epoch * 1000);
-  lastHour.setMinutes(0);
-  lastHour.setSeconds(0);
-  lastHour.setMilliseconds(0);
   
   // Choose axis ticks based on chosen graph timescale
   switch (graph.dt) {
@@ -303,15 +314,12 @@ const showTimeAxis = () => {
   }
   
   // Get axis ticks in epoch time (s)
-  const epochDates = nHours.map((n) => {
-    const date = new Date();
-    date.setTime(lastHour.getTime() + n * 60 * 60 * 1000);
-    
-    return date;
+  const lastHours = nHours.map((n) => {
+    return new Date(lastHour.getTime() + n * 3600 * 1000);
   });
   
   ui.graph.axes.time.ticks.map((tick, i) => {
-    const date = epochDates[i];
+    const date = lastHours[i];
     const time = date.getTime() / 1000;
     const hour = formatTime(date.getHours());
     const minute = formatTime(date.getMinutes());

@@ -2,22 +2,19 @@
   "fitbit": {
     "appUUID": "6295178b-0763-4897-bf80-b6c12125a1c5",
     "appType": "clockface",
-    "appDisplayName": "sugarscout",
+    "appDisplayName": "SugarBit",
     "iconFile": "resources/icon.png",
-    "wipeColor": "#607d8b",
+    "wipeColor": "#ff9800",
     "requestedPermissions": [
       "access_internet",
       "run_background"
     ],
     "buildTargets": [
-      "higgs",
-      "meson",
-      "gemini",
-      "mira"
+      "higgs"
     ],
     "i18n": {
       "en": {
-        "name": "sugarscout"
+        "name": "SugarBit"
       }
     },
     "defaultLanguage": "en-US"

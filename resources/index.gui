@@ -2,7 +2,8 @@
   <section id="top">
     <section id="top-left">
       <text id="bg" />
-      <text id="dbg" />      
+      <text id="dbg" />
+      <text id="error" />
     </section>
     <section id="top-right">
       <text id="time" />

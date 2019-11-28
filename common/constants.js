@@ -6,6 +6,7 @@ export const TIME_24_H = 2 * TIME_12_H; // s
 
 // BGs
 export const BG_UNITS = "mmol/L";
+export const BG_NONE = "---";
 export const BG_MAX_AGE = 15 * 60;   // s
 export const BG_MAX_DELTA = 10 * 60; // s
 
@@ -16,6 +17,3 @@ export const GRAPH_BG_MIN = 0;             // mmol/L
 export const GRAPH_BG_MAX = 16;            // mmol/L
 export const GRAPH_BG_LOW = 4.2;           // mmol/L
 export const GRAPH_BG_HIGH = 8.0;          // mmol/L
-
-// Commands between companion and device
-export const CMD_FETCH_BG = 100;
